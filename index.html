@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FIRA POV Track Simulator</title>
+
+<style>
+html,body{
+    margin:0;
+    overflow:hidden;
+    background:#0b0b0b;
+    font-family:Arial;
+}
+
+canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+}
+
+.panel{
+    position:absolute;
+    top:10px;
+    left:10px;
+    width:320px;
+    max-height:92vh;
+    overflow:auto;
+    background:rgba(0,0,0,0.72);
+    padding:14px;
+    border-radius:14px;
+    color:white;
+    backdrop-filter:blur(5px);
+    z-index:1000;
+}
+
+.panel h2{
+    margin-top:0;
+    font-size:18px;
+}
+
+.control{
+    margin-bottom:14px;
+}
+
+.control label{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    margin-bottom:4px;
+}
+
+.control input{
+    width:100%;
+}
+
+button{
+    border:none;
+    border-radius:10px;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+#pauseBtn{
+    width:100%;
+    padding:10px;
+    background:#00bcd4;
+}
+
+#togglePanelBtn{
+    position:absolute;
+    top:10px;
+    right:10px;
+    z-index:2000;
+    padding:10px 14px;
+    background:#ff9800;
+}
+
+</style>
+</head>
+<body>
+
+<button id="togglePanelBtn">
+Hide Controls
+</button>
+
+<div class="panel">
+
+<h2>FIRA POV Track Control</h2>
+
+<div class="control">
+<label>Speed <span id="speedVal">4</span></label>
+<input type="range" id="speed" min="1" max="20" value="4">
+</div>
+
+<div class="control">
+<label>Lane Width <span id="laneVal">1.15</span></label>
+
+<!-- VERY SMALL MINIMUM WIDTH -->
+<input type="range"
+id="laneWidth"
+min="0.02"
+max="2.0"
+step="0.01"
+value="1.15">
+</div>
+
+<div class="control">
+<label>Road Perspective <span id="perspectiveVal">0.08</span></label>
+<input type="range" id="perspective" min="0.02" max="0.20" step="0.01" value="0.08">
+</div>
+
+<div class="control">
+<label>Edge Line Width <span id="edgeVal">5</span></label>
+<input type="range" id="edgeWidth" min="1" max="20" value="5">
+</div>
+
+<div class="control">
+<label>Middle Line Width <span id="midVal">4</span></label>
+<input type="range" id="midWidth" min="1" max="15" value="4">
+</div>
+
+<div class="control">
+<label>Middle Dash Length <span id="dashLenVal">100</span></label>
+<input type="range" id="dashLen" min="20" max="300" value="100">
+</div>
+
+<div class="control">
+<label>Middle Dash Gap <span id="dashGapVal">140</span></label>
+<input type="range" id="dashGap" min="20" max="400" value="140">
+</div>
+
+<div class="control">
+<label>Curve Strength <span id="curveVal">180</span></label>
+<input type="range" id="curveStrength" min="0" max="400" value="180">
+</div>
+
+<div class="control">
+<label>Secondary Curve <span id="curve2Val">120</span></label>
+<input type="range" id="curveStrength2" min="0" max="300" value="120">
+</div>
+
+<div class="control">
+<label>Road Brightness <span id="brightVal">28</span></label>
+<input type="range" id="brightness" min="5" max="80" value="28">
+</div>
+
+<div class="control">
+<label>Cone Size <span id="coneVal">1</span></label>
+<input type="range" id="coneSize" min="0.2" max="4" step="0.1" value="1">
+</div>
+
+<div class="control">
+<label>Left Cone Frequency <span id="freqLeftVal">5</span></label>
+<input type="range" id="coneFreqLeft" min="0" max="20" value="5">
+</div>
+
+<div class="control">
+<label>Right Cone Frequency <span id="freqRightVal">5</span></label>
+<input type="range" id="coneFreqRight" min="0" max="20" value="5">
+</div>
+
+<button id="pauseBtn">
+Pause
+</button>
+
+</div>
+
+<canvas id="cv"></canvas>
+
+<script>
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+// ========================
+// RESIZE
+// ========================
+
+function resize(){
+
+    cv.width = window.innerWidth;
+    cv.height = window.innerHeight;
+}
+
+resize();
+window.addEventListener("resize", resize);
+
+// ========================
+// CONTROLS
+// ========================
+
+const controls = {
+
+    speed: document.getElementById("speed"),
+    laneWidth: document.getElementById("laneWidth"),
+    perspective: document.getElementById("perspective"),
+    edgeWidth: document.getElementById("edgeWidth"),
+    midWidth: document.getElementById("midWidth"),
+    dashLen: document.getElementById("dashLen"),
+    dashGap: document.getElementById("dashGap"),
+    curveStrength: document.getElementById("curveStrength"),
+    curveStrength2: document.getElementById("curveStrength2"),
+    brightness: document.getElementById("brightness"),
+    coneSize: document.getElementById("coneSize"),
+
+    coneFreqLeft:
+    document.getElementById("coneFreqLeft"),
+
+    coneFreqRight:
+    document.getElementById("coneFreqRight")
+};
+
+const labels = {
+
+    speed: document.getElementById("speedVal"),
+    laneWidth: document.getElementById("laneVal"),
+    perspective: document.getElementById("perspectiveVal"),
+    edgeWidth: document.getElementById("edgeVal"),
+    midWidth: document.getElementById("midVal"),
+    dashLen: document.getElementById("dashLenVal"),
+    dashGap: document.getElementById("dashGapVal"),
+    curveStrength: document.getElementById("curveVal"),
+    curveStrength2: document.getElementById("curve2Val"),
+    brightness: document.getElementById("brightVal"),
+    coneSize: document.getElementById("coneVal"),
+
+    coneFreqLeft:
+    document.getElementById("freqLeftVal"),
+
+    coneFreqRight:
+    document.getElementById("freqRightVal")
+};
+
+function updateLabels(){
+
+    for(let key in controls){
+
+        labels[key].innerText =
+        controls[key].value;
+    }
+}
+
+// ========================
+// PANEL TOGGLE
+// ========================
+
+const panel =
+document.querySelector(".panel");
+
+const toggleBtn =
+document.getElementById("togglePanelBtn");
+
+let panelVisible = true;
+
+toggleBtn.onclick = () => {
+
+    panelVisible = !panelVisible;
+
+    if(panelVisible){
+
+        panel.style.display = "block";
+        toggleBtn.innerText =
+        "Hide Controls";
+
+    }else{
+
+        panel.style.display = "none";
+        toggleBtn.innerText =
+        "Show Controls";
+    }
+};
+
+// ========================
+// MOTION
+// ========================
+
+let travel = 0;
+let paused = false;
+
+// ========================
+// PAUSE BUTTON
+// ========================
+
+const pauseBtn =
+document.getElementById("pauseBtn");
+
+pauseBtn.onclick = () => {
+
+    paused = !paused;
+
+    pauseBtn.innerText =
+    paused ? "Resume" : "Pause";
+};
+
+// ========================
+// CONES
+// ========================
+
+const leftCones = [];
+const rightCones = [];
+
+let leftConeTimer = null;
+let rightConeTimer = null;
+
+function spawnLeftCone(){
+
+    leftCones.push({
+        z:0,
+        side:-1
+    });
+}
+
+function spawnRightCone(){
+
+    rightCones.push({
+        z:0,
+        side:1
+    });
+}
+
+// BIGGER VALUE = MORE FREQUENT
+function frequencyToDelay(freq){
+
+    if(freq <= 0)
+        return null;
+
+    return 2200 - (freq * 100);
+}
+
+function updateConeFrequency(){
+
+    clearInterval(leftConeTimer);
+    clearInterval(rightConeTimer);
+
+    const leftFreq =
+    Number(
+        controls.coneFreqLeft.value
+    );
+
+    const rightFreq =
+    Number(
+        controls.coneFreqRight.value
+    );
+
+    const leftDelay =
+    frequencyToDelay(leftFreq);
+
+    const rightDelay =
+    frequencyToDelay(rightFreq);
+
+    if(leftDelay){
+
+        leftConeTimer =
+        setInterval(
+            spawnLeftCone,
+            leftDelay
+        );
+    }
+
+    if(rightDelay){
+
+        rightConeTimer =
+        setInterval(
+            spawnRightCone,
+            rightDelay
+        );
+    }
+}
+
+controls.coneFreqLeft.addEventListener(
+    "input",
+    updateConeFrequency
+);
+
+controls.coneFreqRight.addEventListener(
+    "input",
+    updateConeFrequency
+);
+
+updateConeFrequency();
+
+// ========================
+// PERSPECTIVE FUNCTIONS
+// ========================
+
+function yFromZ(z,h){
+
+    return h * 0.15 +
+           Math.pow(z,2.2)
+           * h * 0.85;
+}
+
+// VERY NARROW MINIMUM WIDTH
+function roadWidth(z,w){
+
+    const base =
+    Number(
+        controls.perspective.value
+    );
+
+    const lane =
+    Number(
+        controls.laneWidth.value
+    );
+
+    return w * (
+        base +
+        z * lane * 0.55
+    );
+}
+
+function centerCurve(z){
+
+    return (
+
+        Math.sin(
+            z*5 +
+            travel*0.002
+        )
+
+        *
+
+        Number(
+            controls.curveStrength.value
+        )
+
+        +
+
+        Math.sin(
+            z*2.2 + 1.5
+        )
+
+        *
+
+        Number(
+            controls.curveStrength2.value
+        )
+
+        +
+
+        Math.sin(
+            z*9 + 2.5
+        ) * 40
+    );
+}
+
+// ========================
+// DRAW CONE
+// ========================
+
+function drawCone(x,y,s){
+
+    const scale =
+    s *
+    Number(
+        controls.coneSize.value
+    );
+
+    const h = 22 * scale;
+    const w = 16 * scale;
+
+    ctx.fillStyle =
+    "rgba(0,0,0,0.4)";
+
+    ctx.fillRect(
+        x-w*0.8,
+        y,
+        w*1.6,
+        5*scale
+    );
+
+    ctx.fillStyle =
+    "#ff7a00";
+
+    ctx.beginPath();
+
+    ctx.moveTo(x-w/2,y);
+    ctx.lineTo(x+w/2,y);
+    ctx.lineTo(x+w*0.2,y-h);
+    ctx.lineTo(x-w*0.2,y-h);
+
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle =
+    "white";
+
+    ctx.fillRect(
+        x-w*0.3,
+        y-h*0.55,
+        w*0.6,
+        h*0.12
+    );
+}
+
+// ========================
+// DRAW LOOP
+// ========================
+
+function draw(){
+
+    updateLabels();
+
+    if(!paused){
+
+        travel +=
+        Number(
+            controls.speed.value
+        ) * 4;
+    }
+
+    const W = cv.width;
+    const H = cv.height;
+
+    // SKY
+    ctx.fillStyle =
+    "#0b0f1a";
+
+    ctx.fillRect(
+        0,0,W,H
+    );
+
+    // ROAD
+    const bright =
+    Number(
+        controls.brightness.value
+    );
+
+    ctx.fillStyle =
+    `rgb(${bright},${bright},${bright})`;
+
+    ctx.beginPath();
+
+    const samples = 240;
+
+    // LEFT EDGE
+    for(let i=0;i<=samples;i++){
+
+        const z=i/samples;
+
+        const y =
+        yFromZ(z,H);
+
+        const cx =
+        W/2 +
+        centerCurve(z);
+
+        const rw =
+        roadWidth(z,W);
+
+        const x =
+        cx-rw;
+
+        if(i===0)
+            ctx.moveTo(x,y);
+        else
+            ctx.lineTo(x,y);
+    }
+
+    // RIGHT EDGE
+    for(let i=samples;i>=0;i--){
+
+        const z=i/samples;
+
+        const y =
+        yFromZ(z,H);
+
+        const cx =
+        W/2 +
+        centerCurve(z);
+
+        const rw =
+        roadWidth(z,W);
+
+        const x =
+        cx+rw;
+
+        ctx.lineTo(x,y);
+    }
+
+    ctx.closePath();
+    ctx.fill();
+
+    // ====================
+    // ROAD EDGE LINES
+    // ====================
+
+    ctx.strokeStyle =
+    "white";
+
+    ctx.lineWidth =
+    Number(
+        controls.edgeWidth.value
+    );
+
+    for(let side=-1;
+        side<=1;
+        side+=2){
+
+        ctx.beginPath();
+
+        for(let i=0;i<=samples;i++){
+
+            const z=i/samples;
+
+            const y =
+            yFromZ(z,H);
+
+            const cx =
+            W/2 +
+            centerCurve(z);
+
+            const rw =
+            roadWidth(z,W);
+
+            const x =
+            cx+rw*side;
+
+            if(i===0)
+                ctx.moveTo(x,y);
+            else
+                ctx.lineTo(x,y);
+        }
+
+        ctx.stroke();
+    }
+
+    // ====================
+    // CENTER DASHES
+    // ====================
+
+    const dashLen =
+    Number(
+        controls.dashLen.value
+    );
+
+    const dashGap =
+    Number(
+        controls.dashGap.value
+    );
+
+    const total =
+    dashLen + dashGap;
+
+    for(let i=0;i<45;i++){
+
+        let z1 =
+        (
+            (
+                i*total +
+                travel
+            ) % 5000
+        ) / 5000;
+
+        let z2 =
+        z1 +
+        dashLen/5000;
+
+        if(z2>1)
+            continue;
+
+        const y1 =
+        yFromZ(z1,H);
+
+        const y2 =
+        yFromZ(z2,H);
+
+        const x1 =
+        W/2 +
+        centerCurve(z1);
+
+        const x2 =
+        W/2 +
+        centerCurve(z2);
+
+        ctx.strokeStyle =
+        "white";
+
+        ctx.lineWidth =
+        Number(
+            controls.midWidth.value
+        )
+        + z1*6;
+
+        ctx.beginPath();
+
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+
+        ctx.stroke();
+    }
+
+    // ====================
+    // LEFT CONES
+    // ====================
+
+    for(let i=leftCones.length-1;
+        i>=0;
+        i--){
+
+        const c =
+        leftCones[i];
+
+        c.z +=
+        0.006 *
+        Number(
+            controls.speed.value
+        );
+
+        if(c.z>1.2){
+
+            leftCones.splice(i,1);
+            continue;
+        }
+
+        const y =
+        yFromZ(c.z,H);
+
+        const cx =
+        W/2 +
+        centerCurve(c.z);
+
+        const rw =
+        roadWidth(c.z,W);
+
+        const x =
+        cx +
+        rw *
+        0.75 *
+        c.side;
+
+        drawCone(
+            x,
+            y,
+            0.4 +
+            c.z*2.8
+        );
+    }
+
+    // ====================
+    // RIGHT CONES
+    // ====================
+
+    for(let i=rightCones.length-1;
+        i>=0;
+        i--){
+
+        const c =
+        rightCones[i];
+
+        c.z +=
+        0.006 *
+        Number(
+            controls.speed.value
+        );
+
+        if(c.z>1.2){
+
+            rightCones.splice(i,1);
+            continue;
+        }
+
+        const y =
+        yFromZ(c.z,H);
+
+        const cx =
+        W/2 +
+        centerCurve(c.z);
+
+        const rw =
+        roadWidth(c.z,W);
+
+        const x =
+        cx +
+        rw *
+        0.75 *
+        c.side;
+
+        drawCone(
+            x,
+            y,
+            0.4 +
+            c.z*2.8
+        );
+    }
+
+    // ====================
+    // CAR HOOD
+    // ====================
+
+    ctx.fillStyle =
+    "#111";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        W*0.28,H
+    );
+
+    ctx.lineTo(
+        W*0.40,
+        H*0.82
+    );
+
+    ctx.lineTo(
+        W*0.60,
+        H*0.82
+    );
+
+    ctx.lineTo(
+        W*0.72,H
+    );
+
+    ctx.closePath();
+    ctx.fill();
+
+    requestAnimationFrame(draw);
+}
+
+// ========================
+// START
+// ========================
+
+draw();
+
+</script>
+
+</body>
+</html>
